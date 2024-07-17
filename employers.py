@@ -1,6 +1,6 @@
 from flask import Blueprint
 from flask_restful import Api, Resource, reqparse
-from models import db, Employer  # Adjust this import based on your project structure
+from models import db, Employer 
 from flask_cors import CORS
 
 

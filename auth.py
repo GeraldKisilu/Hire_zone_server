@@ -4,26 +4,28 @@ from models import User, db
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import create_access_token, JWTManager, create_refresh_token, jwt_required, current_user
 from functools import wraps
+from datetime import timedelta
+from flask_cors import CORS
+
 
 auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
 bcrypt = Bcrypt()
 jwt = JWTManager()
 auth_api = Api(auth_bp)
+CORS(auth_bp)
 
 def allow(*allowed_roles):
     def wrapper(fn):
         @wraps(fn)
         def decorator(*args, **kwargs):
             user = current_user
+            if user is None:
+                return {"msg": "User not found"}, 401
             roles = [role.name for role in user.roles]
-            for role in allowed_roles:
-                if role in roles:
-                    return fn(*args, **kwargs)
-            else:
-                return {"msg": "Access Denied"}, 403
-
+            if any(role in roles for role in allowed_roles):
+                return fn(*args, **kwargs)
+            return {"msg": "Access Denied"}, 403
         return decorator
-
     return wrapper
 
 @jwt.user_lookup_loader
@@ -46,6 +48,7 @@ login_args.add_argument('password', type=str, required=True, help='Password is r
 class Register(Resource):
     def post(self):
         data = register_args.parse_args()
+        print("Received Data:", data)  # Log the received data
         if User.query.filter_by(email=data['email']).first():
             return {"msg": "Email is already registered!"}, 400
         if User.query.filter_by(username=data['username']).first():
@@ -61,9 +64,15 @@ class Register(Resource):
             job_seeker_id=data.get('job_seeker_id')
         )
         db.session.add(new_user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print("Error while committing to the database:", e)  # Log the error
+            return {"msg": "An error occurred while creating the user"}, 500
 
         return {"msg": 'User created successfully'}, 201
+
 
 class Login(Resource):
     def post(self):
